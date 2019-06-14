@@ -67,8 +67,8 @@ typedef struct State
 } State;
 
 
-#define INIT_WINDOW_WIDTH    800
-#define INIT_WINDOW_HEIGHT   800
+#define INIT_WINDOW_WIDTH    1200
+#define INIT_WINDOW_HEIGHT   900
 
 typedef struct WindowParams
 {
