@@ -10,17 +10,18 @@
  * In addition adding and removing nodes is quite limited at the
  * moment since it is based on a simple fixed array. If this is to be converted
  * into something more serious it is probably best to extend it.*/
-struct node {
+
+typedef struct _Node {
     int ID;
-    char name[32];
+    char name[128];
     struct nk_rect bounds;
     float value;
     struct nk_color color;
     int input_count;
     int output_count;
-    struct node *next;
-    struct node *prev;
-};
+    _Node* next;
+    _Node* prev;
+} Node;
 
 struct node_link {
     int input_id;
@@ -33,29 +34,31 @@ struct node_link {
 
 struct node_linking {
     int active;
-    struct node *node;
+    Node*node;
     int input_id;
     int input_slot;
 };
 
 struct node_editor {
     int initialized;
-    struct node node_buf[32];
+    Node node_buf[32];
     struct node_link links[64];
-    struct node *begin;
-    struct node *end;
+    Node*begin;
+    Node*end;
     int node_count;
     int link_count;
     struct nk_rect bounds;
-    struct node *selected;
+    Node*selected;
     int show_grid;
     struct nk_vec2 scrolling;
     struct node_linking linking;
 };
+
 static struct node_editor nodeEditor;
 
+
 static void
-node_editor_push(struct node_editor *editor, struct node *node)
+node_editor_push(struct node_editor* editor, Node* node)
 {
     if (!editor->begin) {
         node->next = NULL;
@@ -72,7 +75,7 @@ node_editor_push(struct node_editor *editor, struct node *node)
 }
 
 static void
-node_editor_pop(struct node_editor *editor, struct node *node)
+node_editor_pop(struct node_editor* editor, Node* node)
 {
     if (node->next)
         node->next->prev = node->prev;
@@ -86,10 +89,10 @@ node_editor_pop(struct node_editor *editor, struct node *node)
     node->prev = NULL;
 }
 
-static struct node*
+static Node*
 node_editor_find(struct node_editor *editor, int ID)
 {
-    struct node *iter = editor->begin;
+    Node* iter = editor->begin;
     while (iter) {
         if (iter->ID == ID)
             return iter;
@@ -103,7 +106,7 @@ node_editor_add(struct node_editor *editor, const char *name, struct nk_rect bou
     struct nk_color col, int in_count, int out_count)
 {
     static int IDs = 0;
-    struct node *node;
+    Node* node;
     NK_ASSERT((nk_size)editor->node_count < NK_LEN(editor->node_buf));
     node = &editor->node_buf[editor->node_count++];
     node->ID = IDs++;
@@ -151,7 +154,7 @@ node_editor(struct nk_context *ctx)
     struct nk_rect total_space;
     const struct nk_input *in = &ctx->input;
     struct nk_command_buffer *canvas;
-    struct node *updated = 0;
+    Node* updated = 0;
     struct node_editor *nodedit = &nodeEditor;
 
     if (!nodeEditor.initialized) {
@@ -167,7 +170,7 @@ node_editor(struct nk_context *ctx)
         total_space = nk_window_get_content_region(ctx);
         nk_layout_space_begin(ctx, NK_STATIC, total_space.h, nodedit->node_count);
         {
-            struct node *it = nodedit->begin;
+            Node*it = nodedit->begin;
             struct nk_rect size = nk_layout_space_bounds(ctx);
             struct nk_panel *node = 0;
 
@@ -285,8 +288,8 @@ node_editor(struct nk_context *ctx)
             /* draw each link */
             for (n = 0; n < nodedit->link_count; ++n) {
                 struct node_link *link = &nodedit->links[n];
-                struct node *ni = node_editor_find(nodedit, link->input_id);
-                struct node *no = node_editor_find(nodedit, link->output_id);
+                Node*ni = node_editor_find(nodedit, link->input_id);
+                Node*no = node_editor_find(nodedit, link->output_id);
                 float spacei = node->bounds.h / (float)((ni->output_count) + 1);
                 float spaceo = node->bounds.h / (float)((no->input_count) + 1);
                 struct nk_vec2 l0 = nk_layout_space_to_screen(ctx,
