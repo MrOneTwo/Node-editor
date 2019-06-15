@@ -341,7 +341,7 @@ node_editor(struct nk_context *ctx)
         node_editor_push(nodedit, updated);
       }
 
-      /* node selection */
+      /* node selection - fires after releasing a node */
       if (nk_input_mouse_clicked(in, NK_BUTTON_LEFT, nk_layout_space_bounds(ctx))) {
         nodeIter = nodedit->begin;
         nodedit->selected = NULL;
