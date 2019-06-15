@@ -11,6 +11,14 @@
  * moment since it is based on a simple fixed array. If this is to be converted
  * into something more serious it is probably best to extend it.*/
 
+typedef struct _WindowsLayout {
+  struct nk_rect winTransformNodes;
+} WindowsLayout;
+
+typedef struct _SocketArchetype {
+    float radius;
+} SocketArchetype;
+
 typedef struct _Node {
   int ID;
   char name[128];
@@ -19,6 +27,7 @@ typedef struct _Node {
   struct nk_color color;
   int input_count;
   int output_count;
+  bool32 inSelectGroup;
   _Node* next;
   _Node* prev;
 } Node;
@@ -55,7 +64,9 @@ typedef struct _NodeEditor {
 } NodeEditor;
 
 
+static WindowsLayout windowsLayout;
 static NodeEditor nodeEditor;
+static SocketArchetype socketArchetype;
 
 
 static void
@@ -146,6 +157,20 @@ node_editor_init(NodeEditor *editor)
   node_editor_link(editor, 0, 0, 2, 0);
   node_editor_link(editor, 1, 0, 2, 1);
   editor->show_grid = nk_true;
+
+  socketArchetype.radius = 14.0f;
+  windowsLayout.winTransformNodes.x = 0.0f;
+  windowsLayout.winTransformNodes.y = 0.0f;
+  windowsLayout.winTransformNodes.w = 1200.0f;
+  windowsLayout.winTransformNodes.h = 900.0f;
+}
+
+static void
+node_editor_set_nodes_window_transform(float x, float y, float w, float h) {
+  windowsLayout.winTransformNodes.x = x;
+  windowsLayout.winTransformNodes.y = y;
+  windowsLayout.winTransformNodes.w = w;
+  windowsLayout.winTransformNodes.h = h;
 }
 
 static int
@@ -163,15 +188,17 @@ node_editor(struct nk_context *ctx)
     nodeEditor.initialized = 1;
   }
 
-  if (nk_begin(ctx, "NodeEdit", nk_rect(0, 0, 800, 600),
-    NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE|NK_WINDOW_CLOSABLE))
+  if (nk_begin(ctx, "NodeEdit",
+      nk_rect(windowsLayout.winTransformNodes.x, windowsLayout.winTransformNodes.y,
+              windowsLayout.winTransformNodes.w, windowsLayout.winTransformNodes.h),
+      (NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR)))
   {
     /* allocate complete window space */
     canvas = nk_window_get_canvas(ctx);
     total_space = nk_window_get_content_region(ctx);
     nk_layout_space_begin(ctx, NK_STATIC, total_space.h, nodedit->node_count);
     {
-      Node*it = nodedit->begin;
+      Node* nodeIter = nodedit->begin;
       struct nk_rect size = nk_layout_space_bounds(ctx);
       struct nk_panel *node = 0;
 
@@ -187,32 +214,32 @@ node_editor(struct nk_context *ctx)
       }
 
       /* execute each node as a movable group */
-      while (it) {
+      while (nodeIter) {
         /* calculate scrolled node window position and size */
-        nk_layout_space_push(ctx, nk_rect(it->bounds.x - nodedit->scrolling.x,
-          it->bounds.y - nodedit->scrolling.y, it->bounds.w, it->bounds.h));
+        nk_layout_space_push(ctx, nk_rect(nodeIter->bounds.x - nodedit->scrolling.x,
+          nodeIter->bounds.y - nodedit->scrolling.y, nodeIter->bounds.w, nodeIter->bounds.h));
 
         /* execute node window */
-        if (nk_group_begin(ctx, it->name, NK_WINDOW_MOVABLE|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_BORDER|NK_WINDOW_TITLE))
+        if (nk_group_begin(ctx, nodeIter->name, NK_WINDOW_MOVABLE|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_BORDER|NK_WINDOW_TITLE))
         {
           /* always have last selected node on top */
 
           node = nk_window_get_panel(ctx);
           if (nk_input_mouse_clicked(in, NK_BUTTON_LEFT, node->bounds) &&
-            (!(it->prev && nk_input_mouse_clicked(in, NK_BUTTON_LEFT,
+            (!(nodeIter->prev && nk_input_mouse_clicked(in, NK_BUTTON_LEFT,
             nk_layout_space_rect_to_screen(ctx, node->bounds)))) &&
-            nodedit->end != it)
+            nodedit->end != nodeIter)
           {
-            updated = it;
+            updated = nodeIter;
           }
 
           /* ================= NODE CONTENT =====================*/
           nk_layout_row_dynamic(ctx, 25, 1);
-          nk_button_color(ctx, it->color);
-          it->color.r = (nk_byte)nk_propertyi(ctx, "#R:", 0, it->color.r, 255, 1,1);
-          it->color.g = (nk_byte)nk_propertyi(ctx, "#G:", 0, it->color.g, 255, 1,1);
-          it->color.b = (nk_byte)nk_propertyi(ctx, "#B:", 0, it->color.b, 255, 1,1);
-          it->color.a = (nk_byte)nk_propertyi(ctx, "#A:", 0, it->color.a, 255, 1,1);
+          nk_button_color(ctx, nodeIter->color);
+          nodeIter->color.r = (nk_byte)nk_propertyi(ctx, "#R:", 0, nodeIter->color.r, 255, 1,1);
+          nodeIter->color.g = (nk_byte)nk_propertyi(ctx, "#G:", 0, nodeIter->color.g, 255, 1,1);
+          nodeIter->color.b = (nk_byte)nk_propertyi(ctx, "#B:", 0, nodeIter->color.b, 255, 1,1);
+          nodeIter->color.a = (nk_byte)nk_propertyi(ctx, "#A:", 0, nodeIter->color.a, 255, 1,1);
           /* ====================================================*/
           nk_group_end(ctx);
         }
@@ -223,15 +250,15 @@ node_editor(struct nk_context *ctx)
           bounds = nk_layout_space_rect_to_local(ctx, node->bounds);
           bounds.x += nodedit->scrolling.x;
           bounds.y += nodedit->scrolling.y;
-          it->bounds = bounds;
+          nodeIter->bounds = bounds;
 
           /* output connector */
-          space = node->bounds.h / (float)((it->output_count) + 1);
-          for (n = 0; n < it->output_count; ++n) {
+          space = node->bounds.h / (float)((nodeIter->output_count) + 1);
+          for (n = 0; n < nodeIter->output_count; ++n) {
             struct nk_rect circle;
             circle.x = node->bounds.x + node->bounds.w-4;
             circle.y = node->bounds.y + space * (float)(n+1);
-            circle.w = 16; circle.h = 16;
+            circle.w = socketArchetype.radius; circle.h = socketArchetype.radius;
 
             if (nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, circle, nk_true)) {
               nk_fill_circle(canvas, circle, nk_rgb(140, 140, 140));
@@ -244,39 +271,41 @@ node_editor(struct nk_context *ctx)
             /* start linking process */
             if (nk_input_has_mouse_click_down_in_rect(in, NK_BUTTON_LEFT, circle, nk_true)) {
               nodedit->linking.active = nk_true;
-              nodedit->linking.node = it;
-              nodedit->linking.input_id = it->ID;
+              nodedit->linking.node = nodeIter;
+              nodedit->linking.input_id = nodeIter->ID;
               nodedit->linking.input_slot = n;
             }
 
             /* draw curve from linked node slot to mouse position */
-            if (nodedit->linking.active && nodedit->linking.node == it &&
+            if (nodedit->linking.active && nodedit->linking.node == nodeIter &&
               nodedit->linking.input_slot == n) {
-              struct nk_vec2 l0 = nk_vec2(circle.x + 3, circle.y + 3);
+              struct nk_vec2 l0 = nk_vec2(circle.x + socketArchetype.radius/2.0f, circle.y + socketArchetype.radius/2.0f);
               struct nk_vec2 l1 = in->mouse.pos;
               nk_stroke_curve(canvas, l0.x, l0.y, l0.x + 50.0f, l0.y,
-                l1.x - 50.0f, l1.y, l1.x, l1.y, 1.0f, nk_rgb(100, 100, 100));
+                l1.x - 50.0f, l1.y, l1.x, l1.y, 2.0f, nk_rgb(100, 100, 100));
             }
           }
 
           /* input connector */
-          space = node->bounds.h / (float)((it->input_count) + 1);
-          for (n = 0; n < it->input_count; ++n) {
+          space = node->bounds.h / (float)((nodeIter->input_count) + 1);
+          for (n = 0; n < nodeIter->input_count; ++n) {
             struct nk_rect circle;
             circle.x = node->bounds.x-4;
             circle.y = node->bounds.y + space * (float)(n+1);
-            circle.w = 16; circle.h = 16;
+            circle.w = socketArchetype.radius; circle.h = socketArchetype.radius;
             nk_fill_circle(canvas, circle, nk_rgb(100, 100, 100));
+
             if (nk_input_is_mouse_released(in, NK_BUTTON_LEFT) &&
-              nk_input_is_mouse_hovering_rect(in, circle) &&
-              nodedit->linking.active && nodedit->linking.node != it) {
+                nk_input_is_mouse_hovering_rect(in, circle) &&
+                nodedit->linking.active && nodedit->linking.node != nodeIter)
+            {
               nodedit->linking.active = nk_false;
               node_editor_link(nodedit, nodedit->linking.input_id,
-                nodedit->linking.input_slot, it->ID, n);
+                nodedit->linking.input_slot, nodeIter->ID, n);
             }
           }
         }
-        it = it->next;
+        nodeIter = nodeIter->next;
       }
 
       /* reset linking connection */
@@ -289,21 +318,21 @@ node_editor(struct nk_context *ctx)
       /* draw each link */
       for (n = 0; n < nodedit->link_count; ++n) {
         NodeLink *link = &nodedit->links[n];
-        Node*ni = node_editor_find(nodedit, link->input_id);
-        Node*no = node_editor_find(nodedit, link->output_id);
+        Node* ni = node_editor_find(nodedit, link->input_id);
+        Node* no = node_editor_find(nodedit, link->output_id);
         float spacei = node->bounds.h / (float)((ni->output_count) + 1);
         float spaceo = node->bounds.h / (float)((no->input_count) + 1);
         struct nk_vec2 l0 = nk_layout_space_to_screen(ctx,
-          nk_vec2(ni->bounds.x + ni->bounds.w, 3.0f + ni->bounds.y + spacei * (float)(link->input_slot+1)));
+          nk_vec2(ni->bounds.x + ni->bounds.w, socketArchetype.radius/2.0f + ni->bounds.y + spacei * (float)(link->input_slot+1)));
         struct nk_vec2 l1 = nk_layout_space_to_screen(ctx,
-          nk_vec2(no->bounds.x, 3.0f + no->bounds.y + spaceo * (float)(link->output_slot+1)));
+          nk_vec2(no->bounds.x, socketArchetype.radius/2.0f + no->bounds.y + spaceo * (float)(link->output_slot+1)));
 
         l0.x -= nodedit->scrolling.x;
         l0.y -= nodedit->scrolling.y;
         l1.x -= nodedit->scrolling.x;
         l1.y -= nodedit->scrolling.y;
         nk_stroke_curve(canvas, l0.x, l0.y, l0.x + 50.0f, l0.y,
-          l1.x - 50.0f, l1.y, l1.x, l1.y, 1.0f, nk_rgb(100, 100, 100));
+          l1.x - 50.0f, l1.y, l1.x, l1.y, 4.0f, nk_rgb(100, 100, 100));
       }
 
       if (updated) {
@@ -314,16 +343,16 @@ node_editor(struct nk_context *ctx)
 
       /* node selection */
       if (nk_input_mouse_clicked(in, NK_BUTTON_LEFT, nk_layout_space_bounds(ctx))) {
-        it = nodedit->begin;
+        nodeIter = nodedit->begin;
         nodedit->selected = NULL;
         nodedit->bounds = nk_rect(in->mouse.pos.x, in->mouse.pos.y, 100, 200);
-        while (it) {
-          struct nk_rect b = nk_layout_space_rect_to_screen(ctx, it->bounds);
+        while (nodeIter) {
+          struct nk_rect b = nk_layout_space_rect_to_screen(ctx, nodeIter->bounds);
           b.x -= nodedit->scrolling.x;
           b.y -= nodedit->scrolling.y;
           if (nk_input_is_mouse_hovering_rect(in, b))
-            nodedit->selected = it;
-          it = it->next;
+            nodedit->selected = nodeIter;
+          nodeIter = nodeIter->next;
         }
       }
 
