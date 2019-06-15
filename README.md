@@ -1,7 +1,9 @@
-# Observer
+# Node editor
 
-Exploration in a better way to manage 3D assets. For now it's focusing on FBX
-files.
+Node editor UX exploration using Nuklear GUI lib - based on nodes example.
+
+![](thumb.jpg)
+
 
 ## Dependencies
 
